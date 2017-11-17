@@ -1,7 +1,6 @@
 package com.pharbers.aqll.alMSA.alMaxSlaves
 
 import java.io.File
-import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 import scala.concurrent.stm.{Ref, atomic}
@@ -21,9 +20,9 @@ import com.pharbers.aqll.common.alEncryption.alEncryptionOpt
 import com.pharbers.aqll.common.alFileHandler.alFilesOpt.alFileOpt
 import com.pharbers.aqll.common.alFileHandler.fileConfig.{calc, memorySplitFile, sync}
 import com.pharbers.baseModules.PharbersInjectModule
-import com.pharbers.bson.writer.{bsonFlushMemory, phBsonWriter}
+import com.pharbers.bson.writer.bsonFlushMemory
 import com.pharbers.memory.pages.fop.dir.dirPageStorage
-import com.pharbers.memory.pages.{dirFlushMemory, pageMemory, pageMemory2}
+import com.pharbers.memory.pages.dirFlushMemory
 
 /**
   * Created by alfredyang on 13/07/2017.
@@ -109,10 +108,8 @@ class alCalcDataImpl extends Actor with ActorLogging with PharbersInjectModule {
             val dir = alFileOpt(path)
             if (!dir.isExists)
                 dir.createDir
-//            val source = alFileOpt(path + "/" + "data")
+
             val source = new File(path)
-//            val bw_path = s"config/dumpdb/Max_Cores/${sub_uuid}.bson"
-//            val bw = phBsonWriter(bw_path)
             val bfm = bsonFlushMemory(bson_path)
             if (source.exists && source.isDirectory) {
 
@@ -124,42 +121,32 @@ class alCalcDataImpl extends Actor with ActorLogging with PharbersInjectModule {
                 val dr = dirPageStorage(path)
                 dr.readAllData { line =>
 
-//                val page = pageMemory2(path + "/" + "data")
-//                val totalPage = page.pageCount.toInt
-//                (0 until totalPage) foreach { i =>
-//                    page.pageData(i).foreach { line =>
+                    val mrd = alShareData.txt2WestMedicineIncome2(line)
+                    val seed = mrd.segment + mrd.minimumUnitCh + mrd.yearAndmonth.toString
+                    if (mrd.ifPanelAll == "1") {
+                        mrd.set_finalResultsValue(mrd.sumValue)
+                        mrd.set_finalResultsUnit(mrd.volumeUnit)
+                    } else {
 
-                        val mrd = alShareData.txt2WestMedicineIncome2(line)
-                        val seed = mrd.segment + mrd.minimumUnitCh + mrd.yearAndmonth.toString
-                        if (mrd.ifPanelAll == "1") {
-                            mrd.set_finalResultsValue(mrd.sumValue)
-                            mrd.set_finalResultsUnit(mrd.volumeUnit)
-                        } else {
+                        avg.find(p => p._1 == seed.hashCode.toString).map { x =>
+                            mrd.set_finalResultsValue(BigDecimal((x._2 * mrd.selectvariablecalculation.get._2 * mrd.factor.toDouble).toString).toDouble)
+                            mrd.set_finalResultsUnit(BigDecimal((x._3 * mrd.selectvariablecalculation.get._2 * mrd.factor.toDouble).toString).toDouble)
+                        }.getOrElse(Unit)
+                    }
 
-                            avg.find(p => p._1 == seed.hashCode.toString).map { x =>
-                                mrd.set_finalResultsValue(BigDecimal((x._2 * mrd.selectvariablecalculation.get._2 * mrd.factor.toDouble).toString).toDouble)
-                                mrd.set_finalResultsUnit(BigDecimal((x._3 * mrd.selectvariablecalculation.get._2 * mrd.factor.toDouble).toString).toDouble)
-                            }.getOrElse(Unit)
-                        }
-
-                        unit = BigDecimal((unit + mrd.finalResultsUnit).toString).toDouble
-                        value = BigDecimal((value + mrd.finalResultsValue).toString).toDouble
-                        val map_tmp = westMedicineIncome2map(mrd)
+                    unit = BigDecimal((unit + mrd.finalResultsUnit).toString).toDouble
+                    value = BigDecimal((value + mrd.finalResultsValue).toString).toDouble
+                    val map_tmp = westMedicineIncome2map(mrd)
 
 //                        bw.writeBsonFile2(bw.map2bson(map_tmp))
-                         bfm.appendObject(bfm.map2bson(map_tmp))
-                    }
-//                }
+                     bfm.appendObject(bfm.map2bson(map_tmp))
+                }
 
                 bfm.close
-//                bw.flush
-//                bw.close
-//                page.closeStorage
 
                 log.info(s"calc done at ${sub_uuid}")
 
             }else {
-//                log.info(s"Error! source=${source} not exist!")
                 sender() ! calc_data_end(true, tmp)
             }
             sender() ! calc_data_result(value, unit)
